@@ -1,3 +1,8 @@
+# CVE/CWE Mini Toolkit
+
+`docs/proposal.md`에 정리된 기획에 따라, 이 프로젝트는 **NVD(National Vulnerability Database)** 와 **MITRE**에서 제공하는 CVE·CPE·CWE 데이터를 자동 수집하고, 정규화·분석·시각화·RAG 기반 리포트/챗봇 서비스까지 연결되는 파이프라인을 구축합니다.  
+장기적으로는 벤더/제품/취약점 유형별 인사이트를 즉시 제공하고, Streamlit + LLM 챗봇 UI를 통해 비전문가도 최신 보안 트렌드에 쉽게 접근할 수 있도록 하는 것이 목표입니다.
+
 ## 디렉터리 개요
 
 ```
@@ -81,6 +86,15 @@ python3 script/download_data.py --help   # (필요 시 옵션 추가 예정)
 4. **후속 작업**
    - `src/analytics/viz.py`의 TODO를 채우면 pandas/plotly 기반 분석 스크립트를 완성할 수 있습니다.
    - `src/rag/`와 `src/app/` 모듈의 TODO를 구현하면 FAISS + LangChain 기반 인덱싱 및 Streamlit UI를 구축할 수 있습니다.
+
+## 향후 구현 계획
+
+`docs/proposal.md`에 정리된 목표를 달성하려면 아래 작업이 남아 있습니다.
+
+- **고급 분석 및 시각화**: `src/analytics/viz.py`에 연도·벤더·CWE별 통계 함수를 추가하고 Plotly/Altair로 동적 그래프를 생성하여 `reports/figures/`에 저장합니다. `src/analytics/rag_report.py`와 연계해 텍스트 요약을 `reports/text/`에 기록하면 강의/보고서 제작에 바로 활용할 수 있습니다.
+- **RAG 인덱스 구축**: `src/rag/indexer.py`에서 연도별 JSON을 읽어 description·cpes·cwes 필드를 문서화한 뒤 OpenAI 또는 로컬 임베딩으로 FAISS 인덱스를 작성합니다. `src/rag/retriever.py`는 LangChain RetrievalQA 체인과 연결해 실제 답변·인용을 반환하도록 구현합니다.
+- **Streamlit UI 확장**: `src/app/ui.py`에 연도/위험도/CWE 필터, 그래프 탭, 챗봇 탭을 추가해 사용자 유형(실무자/교육자/입문자)에 맞는 뷰를 제공합니다. `script/data_check.py` 결과를 참고하면 필터 옵션 구성이 수월합니다.
+- **API/배포 준비**: 필요 시 FastAPI/Flask 엔드포인트를 추가해 정규화 데이터 조회·요약 API를 제공합니다. Docker/Docker Compose 스크립트와 CI 파이프라인을 구성해 재현성을 확보하고, README의 “사용 방법” 절에 배포 스텝(예: `docker compose up`)을 추가로 기술합니다.
 
 ## 참고 문서
 
