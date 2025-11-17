@@ -1,0 +1,9 @@
+pandas>=2.1
+numpy>=1.26
+streamlit>=1.32
+plotly>=5.18
+faiss-cpu>=1.7.4
+langchain>=0.1.15
+langchain-community>=0.0.30
+tiktoken>=0.6
+python-dotenv>=1.0
