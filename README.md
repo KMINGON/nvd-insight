@@ -98,5 +98,7 @@ python3 script/download_data.py --help   # (필요 시 옵션 추가 예정)
 
 ## 참고 문서
 
-- `/docs/require_columns.md` – raw 데이터에서 추출하는 컬럼 설명
-- `/docs/data_schema_for_analysis.md` – 분석용 최종 데이터 스키마
+- [`docs/require_columns.md`](docs/require_columns.md) – raw 데이터에서 추출하는 컬럼 설명
+- [`docs/data_schema_for_analysis.md`](docs/data_schema_for_analysis.md) – 분석용 최종 데이터 스키마
+- [`docs/data_schema.md`](docs/data_schema.md) – NVD 스키마 레퍼런스 (필요 시 참조)
+- [`docs/git_guide.md`](docs/git_guide.md) – Git을 처음 사용할 때부터 PR 머지까지 따라할 수 있는 협업 가이드
