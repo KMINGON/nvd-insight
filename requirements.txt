@@ -2,6 +2,7 @@ pandas>=2.1
 numpy>=1.26
 streamlit>=1.32
 plotly>=5.18
+kaleido>=0.2
 faiss-cpu>=1.7.4
 langchain>=0.1.15
 langchain-community>=0.0.30

@@ -17,7 +17,11 @@ cve_cwe_mini/
 │  │  └─ build_dataset.py   # 컬럼 추출, json 생성
 │  ├─ analytics/
 │  │  ├─ __init__.py
-│  │  ├─ viz.py             # pandas + 시각화 함수
+│  │  ├─ base_loader.py     # pandas DataFrame 로딩/공통 변환
+│  │  ├─ charts/            # 팀원별 Plotly/Altair 차트 함수
+│  │  │  ├─ __init__.py
+│  │  │  └─ analysis_example.py
+│  │  ├─ viz.py             # 보고서용 PNG 저장 래퍼
 │  │  └─ rag_report.py      # RAG 활용 리포트 생성
 │  ├─ rag/
 │  │  ├─ __init__.py
