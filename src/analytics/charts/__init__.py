@@ -29,6 +29,20 @@ from .high_risk import (
     summarize_high_risk_by_product,
     summarize_high_risk_by_vendor,
 )
+from .skr_score import (
+    build_cwe_score_chart,
+    build_product_score_chart,
+    build_skr_score_added_df,
+    build_top10_chart,
+    build_vendor_score_chart,
+    extract_cvss_payload,
+    load_records_for_year,
+    normalize_years,
+    build_top10_dataset,
+    summarize_cwe_scores,
+    summarize_product_counts,
+    summarize_vendor_counts,
+)
 
 __all__ = [
     "build_yearly_cve_chart",
@@ -48,4 +62,16 @@ __all__ = [
     "build_high_risk_vendor_chart",
     "build_high_risk_product_chart",
     "build_high_risk_cwe_chart",
+    "build_skr_score_added_df",
+    "build_top10_chart",
+    "build_top10_dataset",
+    "normalize_years",
+    "load_records_for_year",
+    "extract_cvss_payload",
+    "summarize_vendor_counts",
+    "summarize_product_counts",
+    "summarize_cwe_scores",
+    "build_vendor_score_chart",
+    "build_product_score_chart",
+    "build_cwe_score_chart",
 ]
