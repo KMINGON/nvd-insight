@@ -14,6 +14,7 @@ from src.rag.indexer import VectorIndexer
 
 
 def parse_args() -> argparse.Namespace:
+    """커맨드라인 인자를 파싱해 인덱싱 파라미터를 반환한다."""
     parser = argparse.ArgumentParser(
         description="Build FAISS index files from processed CVE/CWE datasets."
     )
@@ -57,7 +58,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """CLI 인자를 읽은 뒤 VectorIndexer로 FAISS 인덱스를 생성한다."""
     args = parse_args()
+    # 인자가 비어 있으면 config에 정의된 기본 경로/모델을 사용한다.
     dataset_path = args.dataset_path or config.PROCESSED_DATASET_DIR
     index_dir = args.index_dir or config.FAISS_INDEX_DIR
     embedding_model = args.embedding_model or config.DEFAULT_EMBEDDING_MODEL
@@ -65,6 +68,7 @@ def main() -> None:
     batch_size = max(1, args.batch_size)
     show_progress = not args.no_progress
 
+    # VectorIndexer는 데이터 로드와 빌드를 분리하므로 두 단계로 호출한다.
     indexer = VectorIndexer(
         dataset_path=dataset_path,
         index_dir=index_dir,
