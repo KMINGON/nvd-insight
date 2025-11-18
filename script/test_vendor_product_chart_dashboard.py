@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from src.analytics.base_loader import iter_dataset_files, load_processed_dataframe
-from src.analytics.charts import published_trend_app as trend_charts
+from src.analytics.charts import vendor_product_chart as vp_charts
 
 
 def discover_available_years() -> List[int]:
@@ -25,16 +25,16 @@ def discover_available_years() -> List[int]:
 
 def load_dataset(years: Sequence[int]) -> pd.DataFrame:
     """
-    Wrapper around `load_processed_dataframe` with helpful error handling.
+    Wrapper around `load_processed_dataframe` with basic validation.
     """
     if not years:
-        raise ValueError("At least one year must be selected to load the dataset.")
+        raise ValueError("At least one year must be selected.")
     return load_processed_dataframe(years=years)
 
 
 def render_figure(figure) -> None:
     """
-    Convenience renderer supporting Plotly or Altair figures.
+    Render Plotly or Altair charts depending on the object type.
     """
     if hasattr(figure, "to_plotly_json"):
         st.plotly_chart(figure, use_container_width=True)
@@ -45,8 +45,8 @@ def render_figure(figure) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Published Trend Test Dashboard", layout="wide")
-    st.title("Published Trend 모듈 테스트")
+    st.set_page_config(page_title="Vendor/Product Chart Dashboard", layout="wide")
+    st.title("Vendor / Product 취약점 분포 테스트 대시보드")
 
     with st.sidebar:
         st.header("데이터 필터")
@@ -61,12 +61,7 @@ def main() -> None:
             default=available_years,
             help="분석에 포함할 연도를 선택하세요.",
         )
-        focus_year_label = st.selectbox(
-            "월별 차트 기준 연도",
-            options=["전체 연도"] + [str(year) for year in available_years],
-            index=0,
-        )
-        focus_year: Optional[int] = None if focus_year_label == "전체 연도" else int(focus_year_label)
+        top_n = st.slider("상위 표시 개수", min_value=5, max_value=40, value=15, step=5)
 
     if not year_selection:
         st.warning("최소 한 개 이상의 연도를 선택해야 합니다.")
@@ -81,22 +76,17 @@ def main() -> None:
     st.sidebar.success(f"{len(df):,} 건 로드 완료")
     st.metric("총 CVE 레코드", f"{len(df):,}")
 
-    tabs = st.tabs(["연도별 추이", "월별 추이", "연도-월 Heatmap"])
+    tabs = st.tabs(["Vendor Top-N", "Product Top-N"])
 
     with tabs[0]:
-        st.subheader("연도별 Published 추이")
-        fig_yearly = trend_charts.build_yearly_published_trend(df)
-        render_figure(fig_yearly)
+        st.subheader("Vendor 상위 분포")
+        fig_vendor = vp_charts.build_vendor_bar_chart(df, top_n=top_n)
+        render_figure(fig_vendor)
 
     with tabs[1]:
-        st.subheader("월별 Published 추이")
-        fig_monthly = trend_charts.build_monthly_published_trend(df, focus_year=focus_year)
-        render_figure(fig_monthly)
-
-    with tabs[2]:
-        st.subheader("연도-월 Heatmap")
-        fig_heatmap = trend_charts.build_publication_heatmap(df)
-        render_figure(fig_heatmap)
+        st.subheader("Product 상위 분포")
+        fig_product = vp_charts.build_product_bar_chart(df, top_n=top_n)
+        render_figure(fig_product)
 
 
 if __name__ == "__main__":
