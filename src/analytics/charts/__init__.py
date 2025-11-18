@@ -21,6 +21,14 @@ from .cvss import (
     extract_cvss_metrics,
     summarize_cvss_availability,
 )
+from .high_risk import (
+    build_high_risk_cwe_chart,
+    build_high_risk_product_chart,
+    build_high_risk_vendor_chart,
+    summarize_high_risk_by_cwe,
+    summarize_high_risk_by_product,
+    summarize_high_risk_by_vendor,
+)
 
 __all__ = [
     "build_yearly_cve_chart",
@@ -34,4 +42,10 @@ __all__ = [
     "build_cwe_top_chart",
     "summarize_cvss_availability",
     "extract_cvss_metrics",
+    "summarize_high_risk_by_vendor",
+    "summarize_high_risk_by_product",
+    "summarize_high_risk_by_cwe",
+    "build_high_risk_vendor_chart",
+    "build_high_risk_product_chart",
+    "build_high_risk_cwe_chart",
 ]
