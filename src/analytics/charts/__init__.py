@@ -11,16 +11,14 @@ from .analysis_example import (
     save_figure,
     summarize_counts_by_year,
 )
-from .cvss import (
-    build_cwe_top_chart,
+from .cvss import build_dayofweek_chart, build_hourly_chart, build_monthly_count_chart
+from .cvss_app import (
     build_cvss_score_bin_chart,
     build_cvss_severity_chart,
-    build_dayofweek_chart,
-    build_hourly_chart,
-    build_monthly_count_chart,
     extract_cvss_metrics,
     summarize_cvss_availability,
 )
+from .cwe import build_cwe_top_chart, summarize_cwe_counts
 from .high_risk import (
     build_high_risk_cwe_chart,
     build_high_risk_product_chart,
@@ -39,6 +37,7 @@ __all__ = [
     "build_hourly_chart",
     "build_cvss_severity_chart",
     "build_cvss_score_bin_chart",
+    "summarize_cwe_counts",
     "build_cwe_top_chart",
     "summarize_cvss_availability",
     "extract_cvss_metrics",
