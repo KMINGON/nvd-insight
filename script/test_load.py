@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -76,7 +76,6 @@ def verify_year_files(years: Optional[Iterable[int]]) -> None:
             f"다음 연도의 정규화 파일을 찾을 수 없습니다: {missing}. "
             f"빌드 여부를 확인하거나 --dataset-path 옵션을 사용하세요."
         )
-
 
 def main() -> None:
     args = parse_args()
