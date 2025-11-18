@@ -8,7 +8,6 @@ chart definitions composable so the Streamlit UI can mix and match visualization
 
 from .analysis_example import (
     build_yearly_cve_chart,
-    save_figure,
     summarize_counts_by_year,
 )
 from .cvss import (
@@ -32,7 +31,6 @@ from .high_risk import (
 
 __all__ = [
     "build_yearly_cve_chart",
-    "save_figure",
     "summarize_counts_by_year",
     "build_monthly_count_chart",
     "build_dayofweek_chart",

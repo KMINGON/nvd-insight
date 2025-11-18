@@ -144,8 +144,6 @@ def build_product_bar_chart(
     return fig
 
 
-# TODO: add filters for severity or CWE types before summarizing vendor/product counts.
-
 __all__ = [
     "build_product_bar_chart",
     "build_vendor_bar_chart",
@@ -155,16 +153,3 @@ __all__ = [
     "summarize_vendor_counts",
 ]
 
-
-if __name__ == "__main__":  # pragma: no cover
-    sample = pd.DataFrame(
-        {
-            "cveId": ["CVE-1", "CVE-2"],
-            "cpes": [
-                [{"criteria": "cpe:2.3:a:vendor:product:1.0:*:*:*:*:*:*:*"}],
-                [{"criteria": "cpe:2.3:o:vendor2:product2:2.0:*:*:*:*:*:*:*"}],
-            ],
-        }
-    )
-    exploded = explode_cpe_entries(sample)
-    print(exploded)
