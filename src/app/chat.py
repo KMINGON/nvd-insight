@@ -9,6 +9,7 @@ import streamlit as st
 from ..rag import RagRetriever
 
 
+# 기능: 분석 세션별 상태를 Streamlit state에 저장하기 위한 데이터 클래스.
 @dataclass
 class AnalysisSession:
     """분석별 챗봇 세션 스냅샷."""
@@ -23,10 +24,12 @@ class AnalysisSession:
 class AnalysisChatService:
     """분석 결과 요약 + 후속 질의를 처리하는 Streamlit 헬퍼."""
 
+    # 기능: 분석 챗봇 서비스 인스턴스를 초기화하고 세션 저장소를 설정한다.
     def __init__(self, retriever: RagRetriever, session_store: Dict[str, AnalysisSession] | None = None) -> None:
         self.retriever = retriever
         self.sessions = session_store if session_store is not None else {}
 
+    # 기능: 분석 결과 DF를 기반으로 최초 요약 리포트를 생성하고 세션을 시작한다.
     def start_session(self, session_id: str, df: pd.DataFrame, system_prompt: str) -> str:
         """분석 결과 DF를 기반으로 최초 요약 리포트를 생성한다.
 
@@ -57,6 +60,7 @@ class AnalysisChatService:
         self.sessions[session_id] = session
         return response
 
+    # 기능: 사용자 질문을 기존 세션 컨텍스트에 추가하고 RAG 답변을 반환한다.
     def send_message(self, session_id: str, message: str) -> str:
         """기존 세션 컨텍스트를 유지한 채 후속 질문을 처리한다.
 
@@ -84,6 +88,7 @@ class AnalysisChatService:
         return response
 
     @staticmethod
+    # 기능: 데이터프레임의 컬럼/행 수/샘플을 문자열로 요약한다.
     def _summarize_dataframe(df: pd.DataFrame) -> str:
         """차트별로 다양한 DF 포맷을 처리하기 위한 단순 요약.
 
@@ -104,6 +109,7 @@ class AnalysisChatService:
         )
 
     @staticmethod
+    # 기능: 데이터프레임에서 RAG 검색 필터(year, vendor 등)를 추출한다.
     def _build_filters(df: pd.DataFrame) -> dict:
         """DF에서 RAG 검색에 사용할 메타데이터 필터를 추출한다.
 
@@ -151,6 +157,7 @@ class AnalysisChatService:
         return filters
 
     @staticmethod
+    # 기능: 최초 요약 시 시스템 프롬프트와 DF 정보를 결합한 사용자 프롬프트를 생성한다.
     def _compose_report_prompt(system_prompt: str, summary: str) -> str:
         """최초 요약용 사용자 프롬프트를 구성한다."""
         return (
@@ -161,6 +168,7 @@ class AnalysisChatService:
         )
 
     @staticmethod
+    # 기능: 후속 질문에서 DF 요약과 사용자 입력을 묶은 페이로드를 생성한다.
     def _compose_followup_payload(summary: str, message: str) -> str:
         """후속 질문 시 DF 요약과 사용자 입력을 묶는다."""
         return (
@@ -169,6 +177,7 @@ class AnalysisChatService:
         )
 
     @staticmethod
+    # 기능: YYYY로 시작하는 문자열에서 연도 숫자만 추출한다.
     def _extract_year(value: str) -> int | None:
         """문자열(YYYY...)에서 연도 숫자만 추출한다."""
         if not isinstance(value, str) or len(value) < 4:
@@ -177,6 +186,7 @@ class AnalysisChatService:
         return int(year_part) if year_part.isdigit() else None
 
 
+# 기능: Streamlit UI에서 분석 챗봇 세션을 렌더링하고 대화 흐름을 제어한다.
 def streamlit_chat(
     retriever: RagRetriever,
     df: pd.DataFrame | None = None,

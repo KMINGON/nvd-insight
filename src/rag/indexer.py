@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover
     tqdm = None
 
 
+# 기능: 인덱싱 대상 문서를 표현하는 데이터 클래스.
 @dataclass
 class IndexRecord:
     page_content: str
@@ -51,6 +52,7 @@ class VectorIndexer:
         self.embedding_model = embedding_model or config.DEFAULT_EMBEDDING_MODEL
         self.embedding_backend = (embedding_backend or config.EMBEDDING_BACKEND).lower()
 
+    # 기능: 처리된 JSON 샤드를 순회하며 인덱싱 대상 레코드 목록을 만든다.
     def load_documents(self) -> List[IndexRecord]:
         """TODO: 처리된 데이터를 스트리밍하면서 의미 단위별 청크로 분할해 메모리 사용량을 줄인다."""
         records: List[IndexRecord] = []
@@ -66,6 +68,7 @@ class VectorIndexer:
                 records.append(IndexRecord(page_content=page_content, metadata=metadata))
         return records
 
+    # 기능: 지정된 문서들을 임베딩해 FAISS 인덱스를 생성하고 저장한다.
     def build(
         self,
         docs: Sequence[IndexRecord] | None = None,
@@ -113,6 +116,7 @@ class VectorIndexer:
         vector_store.save_local(folder_path=str(index_path))
         return index_path
 
+    # 기능: 단일 CVE 레코드에서 검색 가능한 메타데이터를 추출한다.
     def _build_metadata(self, row: dict) -> dict:
         """
         정규화된 CVE 레코드에서 검색 가능한 메타데이터 사전을 생성한다.
@@ -136,6 +140,7 @@ class VectorIndexer:
         return {k: v for k, v in metadata.items() if v not in (None, [], "", set())}
 
     @staticmethod
+    # 기능: 날짜 문자열에서 연도 정보를 숫자로 변환한다.
     def _extract_year(date_str: str | None) -> int | None:
         if not date_str:
             return None
@@ -143,6 +148,7 @@ class VectorIndexer:
         return int(year_part) if year_part.isdigit() else None
 
     @staticmethod
+    # 기능: CPE 리스트에서 벤더/제품 식별자를 추출한다.
     def _extract_cpe_entities(cpe_list) -> Tuple[List[str], List[str]]:
         vendors: set[str] = set()
         products: set[str] = set()
@@ -160,6 +166,7 @@ class VectorIndexer:
         return (sorted(vendors), sorted(products))
 
     @staticmethod
+    # 기능: 단일 CPE URI에서 벤더/제품 문자열을 파싱한다.
     def _parse_cpe(criteria: str | None) -> Tuple[str | None, str | None]:
         if not criteria or not isinstance(criteria, str):
             return (None, None)
@@ -171,6 +178,7 @@ class VectorIndexer:
         return (vendor, product)
 
     @staticmethod
+    # 기능: CWE 목록에서 ID만 추출해 정렬한다.
     def _extract_cwe_ids(cwe_list) -> List[str]:
         if not isinstance(cwe_list, list):
             return []
@@ -178,6 +186,7 @@ class VectorIndexer:
         return sorted(values)
 
     @staticmethod
+    # 기능: CVSS 메트릭에서 대표 심각도/점수를 선택한다.
     def _extract_cvss_summary(metrics: dict | None) -> Tuple[str | None, float | None]:
         if not isinstance(metrics, dict):
             return (None, None)
@@ -205,6 +214,7 @@ class VectorIndexer:
                     return (severity or None, score_value)
         return (None, None)
 
+    # 기능: 설정에 맞춰 OpenAI 또는 로컬 임베딩 인스턴스를 생성한다.
     def _resolve_embeddings(self):
         model_name = self.embedding_model or config.DEFAULT_EMBEDDING_MODEL
         backend = (self.embedding_backend or "local").lower()

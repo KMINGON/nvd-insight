@@ -6,6 +6,7 @@
 __all__ = ["VectorIndexer", "RagRetriever", "RetrieverConfig"]
 
 
+# 기능: 지연 임포트를 통해 RAG 핵심 클래스를 노출한다.
 def __getattr__(name):
     if name == "VectorIndexer":
         from .indexer import VectorIndexer as _VectorIndexer

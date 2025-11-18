@@ -33,6 +33,7 @@ RETRIEVAL_PROMPT = ChatPromptTemplate.from_messages(
 ) if ChatPromptTemplate is not None else None
 
 
+# 기능: 검색 결과 한 건의 텍스트/점수/메타데이터를 묶은 컨테이너.
 @dataclass
 class RetrievalResult:
     """검색 결과 1건에 대한 정보 컨테이너."""
@@ -42,6 +43,7 @@ class RetrievalResult:
     metadata: dict
 
 
+# 기능: RAG 검색기의 경로/모델 설정을 묶은 데이터 클래스.
 @dataclass
 class RetrieverConfig:
     """RAG 검색기가 참고할 경로/모델 파라미터."""
@@ -63,6 +65,7 @@ class RagRetriever:
         self.is_loaded = False
         self.prompt_template = RETRIEVAL_PROMPT
 
+    # 기능: FAISS 인덱스와 임베딩/LLM 클라이언트를 초기화한다.
     def load(self) -> None:
         """FAISS 인덱스를 읽어들이고 임베딩/LLM 클라이언트를 초기화한다."""
         if FAISS is None:
@@ -84,6 +87,7 @@ class RagRetriever:
             )
         self.is_loaded = True
 
+    # 기능: 쿼리 및 필터를 사용해 유사도 검색을 수행한다.
     def retrieve(self, query: str, filters: dict | None = None, top_k: int | None = None) -> List[RetrievalResult]:
         """쿼리와 메타데이터 필터를 이용해 유사도 검색을 수행한다.
 
@@ -113,6 +117,7 @@ class RagRetriever:
             )
         return results
 
+    # 기능: 검색된 문맥과 히스토리를 결합해 LLM 응답을 생성한다.
     def generate_response(
         self,
         system_prompt: str,
@@ -153,6 +158,7 @@ class RagRetriever:
         response = self.llm.invoke(messages)
         return getattr(response, "content", str(response))
 
+    # 기능: 간단한 질의응답 흐름을 위한 헬퍼.
     def ask(self, question: str, top_k: int = 5, citations: bool = True) -> str:
         """레거시 보고서 흐름을 위한 간단 헬퍼."""
         _ = citations  # TODO: 인용 포맷이 완성되면 활용하도록 확장한다.
@@ -165,12 +171,14 @@ class RagRetriever:
         )
 
     @staticmethod
+    # 기능: 대화 히스토리를 단일 문자열로 포맷해 LLM 프롬프트에 넣는다.
     def _format_history(history: List[dict] | None) -> str:
         if not history:
             return "없음"
         return "\n".join(f"{item['role']}: {item['content']}" for item in history)
 
     @staticmethod
+    # 기능: 빈 값이 제거된 필터 사전을 생성해 내부 검색에서 사용한다.
     def _normalize_filters(filters: dict | None) -> dict:
         if not filters:
             return {}
@@ -189,6 +197,7 @@ class RagRetriever:
                 normalized[key] = value
         return normalized
 
+    # 기능: 메타데이터 필터를 적용해 FAISS 유사도 검색 결과를 후처리한다.
     def _search_with_filters(
         self,
         query: str,
@@ -212,6 +221,7 @@ class RagRetriever:
         return filtered if filtered else docs_with_scores[:top_k]
 
     @staticmethod
+    # 기능: 문서 메타데이터가 필터 조건을 만족하는지 검사한다.
     def _matches_filters(doc: Any, filters: dict) -> bool:
         metadata = getattr(doc, "metadata", {}) or {}
         for key, expected in filters.items():
@@ -237,6 +247,7 @@ class RagRetriever:
         return True
 
     @staticmethod
+    # 기능: 검색 결과 목록을 LLM 프롬프트에 삽입할 텍스트로 변환한다.
     def _format_context(docs_with_scores: Sequence[Tuple[Any, float]]) -> str:
         if not docs_with_scores:
             return "검색된 문서가 없습니다."
@@ -248,6 +259,7 @@ class RagRetriever:
             blocks.append(f"[{label}] score={score:.3f}\n{snippet}")
         return "\n\n".join(blocks)
 
+    # 기능: 설정된 백엔드에 따라 OpenAI 혹은 로컬 임베딩을 생성한다.
     def _resolve_embeddings(self):
         backend = (self.config.embedding_backend or "local").lower()
         model_name = self.config.embedding_model or config.DEFAULT_EMBEDDING_MODEL
