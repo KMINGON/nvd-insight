@@ -72,6 +72,7 @@ def render_cwe_page(
                 ),
             },
         }
+        # 차트는 같더라도 대상자별로 다른 리포트를 뽑을 수 있도록 페르소나 라디오 버튼 제공
         persona_key = st.radio(
             "AI 리포트 유형",
             options=list(persona_configs.keys()),
@@ -80,6 +81,7 @@ def render_cwe_page(
         )
         st.caption(persona_configs[persona_key]["description"])
 
+        # 기본 설명 프롬프트에 선택된 페르소나용 추가 지침을 결합해 목적별 문장을 생성
         base_prompt = (
             "당신은 CWE 취약점 유형 빈도를 분석하는 한국어 보안 분석가입니다. "
             "Top-N CWE 목록을 활용해 자주 등장하는 취약점 패턴과 그 의미를 설명하세요."
