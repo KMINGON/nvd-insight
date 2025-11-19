@@ -289,20 +289,32 @@ def render_skr_score_page(
         col1, col2 = st.columns(2)
         with col1:
             st.plotly_chart(
-                skr_score.build_vendor_score_chart(vendor_summary, "SKR 고위험 벤더"),
+                skr_score.build_vendor_score_chart(
+                    vendor_summary,
+                    "SKR 고위험 벤더",
+                    threshold=score_threshold,
+                ),
                 use_container_width=True,
             )
             st.dataframe(vendor_summary)
         with col2:
             st.plotly_chart(
-                skr_score.build_product_score_chart(product_summary, "SKR 고위험 제품"),
+                skr_score.build_product_score_chart(
+                    product_summary,
+                    "SKR 고위험 제품",
+                    threshold=score_threshold,
+                ),
                 use_container_width=True,
             )
             st.dataframe(product_summary)
 
         # CWE 분석은 별도의 전체 폭 차트로 보여주고 테이블도 바로 아래에 추가한다.
         st.plotly_chart(
-            skr_score.build_cwe_score_chart(cwe_summary, "SKR 고위험 CWE"),
+            skr_score.build_cwe_score_chart(
+                cwe_summary,
+                "SKR 고위험 CWE",
+                threshold=score_threshold,
+            ),
             use_container_width=True,
         )
         st.dataframe(cwe_summary)
