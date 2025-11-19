@@ -14,7 +14,7 @@
    - 함수는 순수하게 Figure만 생성해야 하며, 파일 저장은 하지 않습니다.
 3. **테스트 및 공유**  
    - `script/test_load.py`로 로딩이 정상인지 확인한 뒤, 노트북 혹은 간단한 Python 스니펫에서 `build_*` 함수를 호출해 Figure를 검증합니다.  
-   - Streamlit UI(`src/app/ui.py`)에서는 이 Figure를 직접 렌더링하거나 필요 시 `src/analytics/viz.py`를 통해 PNG로 저장합니다.
+   - Streamlit 멀티페이지 앱(`Home.py` + `pages/`)에서는 이 Figure를 직접 렌더링하거나 필요 시 `src/analytics/viz.py`를 통해 PNG로 저장합니다.
 
 ---
 

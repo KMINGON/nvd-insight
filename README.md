@@ -6,13 +6,15 @@
 
 - **데이터 파이프라인**: NVD/MITRE 원천 데이터를 자동 다운로드 → 정규화 → 연도별 JSON 샤드 생성.
 - **RAG 인덱싱**: Sentence-Transformers(기본) 또는 OpenAI 임베딩으로 FAISS 인덱스를 구축하고, LangChain Retriever/LLM으로 질의 응답.
-- **Streamlit UI**: 인사이트별(벤더/제품, SKR Score, Published Trend, CVSS 분포, CWE Top-N) 시각화 탭 + RAG 챗봇 탭을 통합 제공.
+- **Streamlit UI**: 네비게이터 기반 멀티페이지 구조로 인사이트별(벤더/제품, SKR Score, Published Trend, CVSS 분포, CWE Top-N) 시각화 탭 + RAG 챗봇 탭을 통합 제공.
 - **Published Trend 시계열**: 연도/월별 CVE 공개량을 Plotly로 시각화하고 같은 화면에서 계절성 요약 챗봇을 실행.
 - **분석/리포트 자산**: `reports/`에 도식/텍스트를 저장하고, 추가 인사이트 모듈을 쉽게 확장할 수 있는 구조.
 
 ## 리포지토리 구조 요약
 
 ```
+Home.py          # Streamlit 멀티페이지 엔트리포인트
+pages/           # Streamlit 페이지 셸 (각 페이지에서 src/app/pages 호출)
 data/
 ├─ raw/          # NVD/MITRE 원본 (CVE/CPE/CWE)
 ├─ processed/    # 정규화된 연도별 JSON
@@ -23,7 +25,7 @@ src/
 ├─ dataset/      # load_raw.py + build_dataset.py
 ├─ analytics/    # Plotly/Altair 차트 & 공통 로더
 ├─ rag/          # indexer.py + retriever.py
-└─ app/          # Streamlit UI/chat 모듈
+└─ app/          # Streamlit 공용 상태/챗봇 모듈
 ```
 
 ## 사전 요구 사항
@@ -89,10 +91,10 @@ python script/build_faiss_index.py --batch-size 64
 ### 7. Streamlit UI 실행
 
 ```bash
-streamlit run src/app/ui.py
+streamlit run Home.py
 ```
 
-- 좌측 사이드바에서 연도/인사이트를 선택하면 시각화 + AI 요약 탭이 표시됩니다.
+- Home 페이지에서 데이터 경로와 연도를 선택하면 상단 `Pages` 네비게이터를 통해 각 인사이트 페이지로 이동할 수 있습니다.
 - RAG 탭이 비활성화될 경우 FAISS 인덱스가 누락된 것이므로 6단계를 재확인하세요.
 
 ## 환경 변수(.env) 예시
@@ -120,12 +122,12 @@ CHAT_COMPLETION_MODEL=gpt-4o-mini
 | `python -m src.dataset.build_dataset` | raw → processed 변환 |
 | `script/build_faiss_index.py` | 처리된 JSON으로 FAISS 인덱스 생성 |
 | `script/data_check.py --year 2024` | 특정 연도의 정규화 데이터를 미리보기 |
-| `streamlit run src/app/ui.py` | 웹 UI 실행 |
+| `streamlit run Home.py` | 멀티페이지 Streamlit UI 실행 |
 
 ## 인사이트 확장 가이드
 
 1. `src/analytics/charts/`에 새 모듈을 추가하고 Plotly/Altair Figure 생성 함수를 작성합니다.
-2. `src/app/ui.py`의 `INSIGHT_PAGES` 딕셔너리에 새 `InsightPage`를 등록합니다. `render` 콜백에서 시각화 탭과 `streamlit_chat` 탭을 모두 구현하면 기존 구조에 자동으로 연결됩니다.
+2. `src/app/pages/`에 대응하는 `render_*` 함수를 추가하고 `src/app/pages/__init__.py`에서 내보낸 뒤, 루트 `pages/XX_New_Page.py`에 Home 세션을 검사한 뒤 해당 렌더러를 호출하는 셸 파일을 추가합니다.
 3. 필요한 경우 RAG 인덱스에 더 많은 메타데이터를 포함시키기 위해 `src/rag/indexer.py`의 `_build_metadata` 함수를 확장합니다.
 
 ## 문제 해결

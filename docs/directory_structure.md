@@ -1,5 +1,7 @@
 ```text
 cve_cwe_mini/
+├─ Home.py         # Streamlit 엔트리포인트 (멀티페이지)
+├─ pages/          # Streamlit 페이지 셸 (renders src/app/pages/*)
 ├─ data/
 │  ├─ raw/          # 원본 CVE/CWE 데이터 (NVD JSON 등)
 │  ├─ processed/    # 컬럼 추출 후 json 데이터셋
@@ -27,7 +29,6 @@ cve_cwe_mini/
 │  │  └─ retriever.py       # 질의 → 유사 도큐먼트 반환
 │  └─ app/
 │     ├─ __init__.py
-│     ├─ ui.py              # streamlit 메인 앱
 │     └─ chat.py            # RAG 기반 QA 챗봇 로직
 ├─ requirements.txt
 └─ README.md
