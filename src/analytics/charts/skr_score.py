@@ -9,6 +9,7 @@ from datetime import datetime
 import re
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 try:
@@ -34,6 +35,26 @@ TOP10_COLUMNS = [
     "skrScore",
 ]
 CISA_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SEVERITY_COLOR_MAP = {
+    "CRITICAL": "#d62728",
+    "HIGH": "#ff7f0e",
+    "MEDIUM": "#ffbf00",
+    "LOW": "#1f77b4",
+    "UNKNOWN": "#8c8c8c",
+}
+BAND_COLOR_MAP = {
+    "Low (0-5)": "#1f77b4",
+    "Medium (5-8)": "#ffbf00",
+    "High (8-10)": "#ff7f0e",
+    "Critical+ (10+)": "#d62728",
+}
+SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
+SKR_SCORE_BANDS = [
+    "Low (0-5)",
+    "Medium (5-8)",
+    "High (8-10)",
+    "Critical+ (10+)",
+]
 
 
 # 기능: 연도 입력값을 문자열 리스트로 정규화해 키/로딩에 재사용한다.
@@ -239,7 +260,7 @@ def build_top10_chart(df: pd.DataFrame):
         x="cveId",
         y="skrScore",
         color="baseSeverity",
-        color_discrete_map={"CRITICAL": "#d62728", "HIGH": "#ff7f0e"},
+        color_discrete_map=SEVERITY_COLOR_MAP,
         hover_data={
             "cveId": True,
             "baseSeverity": True,
@@ -259,6 +280,554 @@ def build_top10_chart(df: pd.DataFrame):
         margin=dict(l=60, r=40, t=80, b=120),
     )
     return fig
+
+
+# 기능: Top10 CVE를 시간축으로 표시하는 산점도 차트를 생성한다.
+# 매개변수: df(build_top10_dataset에서 반환된 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_top10_timeline_chart(df: pd.DataFrame):
+    if df.empty:
+        fig = px.scatter(title="Top 10 CVE Timeline (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    timeline_df = df.copy()
+    timeline_df["published"] = pd.to_datetime(timeline_df["published"], errors="coerce")
+    timeline_df = timeline_df.dropna(subset=["published"])
+    if timeline_df.empty:
+        fig = px.scatter(title="Top 10 CVE Timeline (게시일 없음)")
+        fig.add_annotation(text="게시일 정보가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    fig = px.scatter(
+        timeline_df,
+        x="published",
+        y="skrScore",
+        size="baseScore",
+        color="baseSeverity",
+        color_discrete_map=SEVERITY_COLOR_MAP,
+        hover_data={
+            "cveId": True,
+            "baseSeverity": True,
+            "baseScore": True,
+            "skrScore": True,
+            "published": True,
+        },
+        text="cveId",
+        title="올해 반드시 주의해야 할 상위 10대 취약점 타임라인",
+    )
+    fig.update_traces(textposition="top center")
+    fig.update_layout(
+        xaxis_title="발표일",
+        yaxis_title="SKR Score (실제 위험도 점수)",
+        yaxis=dict(range=[0, 12]),
+        margin=dict(l=60, r=40, t=80, b=80),
+    )
+    return fig
+
+
+# 기능: baseSeverity별 CISA 악용 여부 분포를 요약한다.
+def summarize_severity_cisa(df: pd.DataFrame) -> pd.DataFrame:
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        return pd.DataFrame(columns=["baseSeverity", "cisaLabel", "count", "avgSkrScore"])
+
+    working = enriched.copy()
+    working["baseSeverity"] = working["baseSeverity"].fillna("UNKNOWN").str.upper()
+    working["cisaLabel"] = working["cisaFlag"].apply(lambda flag: "악용됨" if int(flag or 0) else "미확인")
+    summary = (
+        working.groupby(["baseSeverity", "cisaLabel"], as_index=False)
+        .agg(count=("cveId", "size"), avgSkrScore=("skrScore", "mean"))
+    )
+    summary["avgSkrScore"] = summary["avgSkrScore"].fillna(0.0)
+    summary["order"] = summary["baseSeverity"].apply(
+        lambda value: SEVERITY_ORDER.index(value) if value in SEVERITY_ORDER else len(SEVERITY_ORDER)
+    )
+    summary = summary.sort_values(by=["order", "cisaLabel"], ascending=[True, True]).drop(columns="order")
+    return summary.reset_index(drop=True)
+
+
+# 기능: Severity별 악용 여부 집계를 듀얼축 막대 차트로 표현한다.
+# 매개변수: summary_df(summarize_severity_cisa 결과 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_severity_cisa_chart(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = go.Figure()
+        fig.update_layout(title="Severity vs Exploitability (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    pivot = summary_df.pivot_table(
+        index="baseSeverity",
+        columns="cisaLabel",
+        values="count",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    pivot = pivot.reindex(SEVERITY_ORDER, fill_value=0)
+    severities = [severity for severity in SEVERITY_ORDER if severity in pivot.index]
+    if not severities:
+        severities = list(pivot.index)
+
+    counts_unknown = pivot.get("미확인", pd.Series(0, index=pivot.index)).loc[severities].tolist()
+    counts_exploited = pivot.get("악용됨", pd.Series(0, index=pivot.index)).loc[severities].tolist()
+
+    fig = go.Figure()
+    fig.add_bar(
+        x=severities,
+        y=counts_unknown,
+        name="미확인",
+        marker_color="#1f77b4",
+        offsetgroup="unknown",
+    )
+    fig.add_bar(
+        x=severities,
+        y=counts_exploited,
+        name="악용됨",
+        marker_color="#d62728",
+        offsetgroup="exploited",
+        yaxis="y2",
+    )
+    fig.update_layout(
+        title="심각도와 실제 악용의 관계",
+        barmode="group",
+        bargap=0.25,
+        legend_title="CISA 악용 여부",
+        margin=dict(l=60, r=40, t=80, b=80),
+        xaxis=dict(title="CVSS Severity"),
+        yaxis=dict(title="CVE 개수 (미확인)", rangemode="tozero"),
+        yaxis2=dict(title="CVE 개수 (악용됨)", overlaying="y", side="right", rangemode="tozero"),
+    )
+    return fig
+
+
+# 기능: SKR Score 위험도 구간별 분포를 요약하고 시각화 데이터로 반환한다.
+def summarize_skr_band_distribution(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        empty_counts = pd.DataFrame(columns=["band", "cisaLabel", "count"])
+        empty_summary = pd.DataFrame(columns=["band", "count", "ratio", "exploited"])
+        return empty_counts, empty_summary
+
+    working = enriched.dropna(subset=["skrScore"]).copy()
+    bins = [-0.01, 5, 8, 10, float("inf")]
+    working["band"] = pd.cut(
+        working["skrScore"],
+        bins=bins,
+        labels=SKR_SCORE_BANDS,
+        right=False,
+        include_lowest=True,
+    )
+    working = working.dropna(subset=["band"])
+    working["cisaLabel"] = working["cisaFlag"].apply(lambda flag: "악용됨" if int(flag or 0) else "미확인")
+    counts = (
+        working.groupby(["band", "cisaLabel"], as_index=False, observed=True)
+        .agg(count=("cveId", "size"))
+    )
+    counts["band"] = counts["band"].astype(str)
+    counts["band"] = pd.Categorical(counts["band"], categories=SKR_SCORE_BANDS, ordered=True)
+    counts = counts.sort_values("band").reset_index(drop=True)
+
+    summary = (
+        working.groupby("band", as_index=False, observed=True)
+        .agg(count=("cveId", "size"), exploited=("cisaFlag", "sum"))
+    )
+    total = summary["count"].sum() or 1
+    summary["ratio"] = summary["count"] / total
+    summary["band"] = summary["band"].astype(str)
+    summary["band"] = pd.Categorical(summary["band"], categories=SKR_SCORE_BANDS, ordered=True)
+    summary = summary.sort_values("band").reset_index(drop=True)
+    return counts, summary
+
+
+# 기능: 위험도 구간별 전체 비중을 도넛 차트로 표현한다.
+# 매개변수: summary_df(summarize_skr_band_distribution의 요약 DF).
+# 반환: Plotly Figure 객체.
+def build_skr_band_pie_chart(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = px.pie(title="SKR Score Band 분포 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    fig = px.pie(
+        summary_df,
+        names="band",
+        values="count",
+        color="band",
+        color_discrete_map=BAND_COLOR_MAP,
+        category_orders={"band": SKR_SCORE_BANDS},
+        hole=0.35,
+        title="SKR Score 위험도 구간 비중",
+    )
+    fig.update_traces(textinfo="percent+label", hovertemplate="%{label}<br>건수: %{value}<br>비율: %{percent}")
+    fig.update_layout(margin=dict(l=40, r=40, t=80, b=40))
+    return fig
+
+
+# 기능: 위험도 구간 내 악용 비율을 막대 차트로 나타낸다.
+# 매개변수: summary_df(summarize_skr_band_distribution의 요약 DF).
+# 반환: Plotly Figure 객체.
+def build_skr_band_exploit_ratio_chart(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = px.bar(title="SKR Score Band 악용 비중 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    working = summary_df.copy()
+    working["exploited_ratio"] = working.apply(
+        lambda row: (row["exploited"] / row["count"]) if row["count"] else 0.0,
+        axis=1,
+    )
+    fig = px.bar(
+        working,
+        x="band",
+        y="exploited_ratio",
+        color="band",
+        color_discrete_map=BAND_COLOR_MAP,
+        category_orders={"band": SKR_SCORE_BANDS},
+        text=working["exploited_ratio"].map(lambda v: f"{v * 100:.1f}%"),
+        title="구간별 실제 악용 비중",
+    )
+    fig.update_layout(
+        xaxis_title="SKR Score 구간",
+        yaxis_title="악용 비중",
+        yaxis=dict(tickformat=".0%", range=[0, 1]),
+        showlegend=False,
+        margin=dict(l=60, r=40, t=80, b=60),
+    )
+    return fig
+
+
+# 기능: 구간별 건수(막대)와 악용 비율(선)을 듀얼축으로 동시에 보여준다.
+# 매개변수: summary_df(summarize_skr_band_distribution의 요약 DF).
+# 반환: Plotly Figure 객체.
+def build_skr_band_dual_axis_chart(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = go.Figure()
+        fig.update_layout(title="SKR Score Band 악용 비중 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    working = summary_df.copy()
+    working["exploited_ratio"] = working.apply(
+        lambda row: (row["exploited"] / row["count"]) if row["count"] else 0.0,
+        axis=1,
+    )
+    working = working.sort_values("band")
+    fig = go.Figure()
+    fig.add_bar(
+        x=working["band"],
+        y=working["count"],
+        name="CVE 건수",
+        marker_color="#1f77b4",
+        yaxis="y1",
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=working["band"],
+            y=working["exploited_ratio"],
+            name="악용 비율",
+            mode="lines+markers",
+            line=dict(color="#d62728", width=2),
+            marker=dict(size=8),
+            yaxis="y2",
+        )
+    )
+    fig.update_layout(
+        title="구간별 건수 vs 악용 비율",
+        xaxis=dict(title="SKR Score 구간", categoryorder="array", categoryarray=SKR_SCORE_BANDS),
+        yaxis=dict(title="CVE 건수", rangemode="tozero"),
+        yaxis2=dict(title="악용 비율", overlaying="y", side="right", tickformat=".0%", rangemode="tozero"),
+        legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center"),
+        margin=dict(l=60, r=60, t=80, b=80),
+    )
+    return fig
+
+
+# 기능: 악용 보고된 취약점에 대해 발행→악용까지 걸린 일수를 계산한다.
+def summarize_days_to_exploit(df: pd.DataFrame) -> pd.DataFrame:
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        return pd.DataFrame(columns=["cveId", "baseSeverity", "published", "days_to_exploit"])
+
+    working = enriched.copy()
+    working = working[working["cisaFlag"] == 1]
+    if working.empty:
+        return pd.DataFrame(columns=["cveId", "baseSeverity", "published", "days_to_exploit"])
+
+    published = pd.to_datetime(working["published"], errors="coerce")
+    cisa_dates = pd.to_datetime(working["cisaExploitAdd"], errors="coerce")
+    delta = (cisa_dates - published).dt.days
+    working = working.assign(
+        days_to_exploit=delta,
+        published=published,
+    )
+    working = working.dropna(subset=["days_to_exploit"])
+    working = working[working["days_to_exploit"] >= 0]
+    working["baseSeverity"] = working["baseSeverity"].fillna("UNKNOWN").str.upper()
+    return working[["cveId", "baseSeverity", "published", "days_to_exploit"]].reset_index(drop=True)
+
+
+# 기능: 악용까지 걸린 일수 분포를 Severity별 누적 막대로 시각화한다.
+# 매개변수: summary_df(summarize_days_to_exploit 결과 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_days_to_exploit_histogram(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = px.histogram(title="악용까지 걸린 시간 분포 (데이터 없음)")
+        fig.add_annotation(text="악용 데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    fig = px.histogram(
+        summary_df,
+        x="days_to_exploit",
+        color="baseSeverity",
+        category_orders={"baseSeverity": SEVERITY_ORDER},
+        color_discrete_map=SEVERITY_COLOR_MAP,
+        nbins=30,
+        marginal="rug",
+        histnorm="",
+        title="악용까지 걸린 시간 분포",
+    )
+    fig.update_traces(opacity=0.85)
+    fig.update_layout(
+        xaxis_title="발표 후 악용까지 걸린 일수",
+        yaxis_title="취약점 수",
+        barmode="stack",
+        legend_title="CVSS Severity",
+        margin=dict(l=60, r=40, t=80, b=60),
+    )
+    return fig
+
+
+# 기능: 악용까지 걸린 시간 분포를 KDE/등고선으로 표현한다.
+# 매개변수: summary_df(summarize_days_to_exploit 결과 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_days_to_exploit_kde(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = px.density_contour(title="악용까지 걸린 시간 KDE (데이터 없음)")
+        fig.add_annotation(text="악용 데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    fig = px.density_contour(
+        summary_df,
+        x="days_to_exploit",
+        title="악용까지 걸린 시간 KDE",
+    )
+    fig.update_traces(contours_coloring="fill", contours_showlabels=True)
+    fig.update_layout(
+        xaxis_title="발표 후 악용까지 걸린 일수",
+        yaxis_title="밀도",
+        margin=dict(l=40, r=20, t=60, b=60),
+    )
+    return fig
+
+
+# 기능: Severity별 악용까지 걸린 일수 분포를 박스플롯으로 요약한다.
+# 매개변수: summary_df(summarize_days_to_exploit 결과 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_days_to_exploit_box(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = px.box(title="Severity별 악용까지 걸린 시간 (데이터 없음)")
+        fig.add_annotation(text="악용 데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    fig = px.box(
+        summary_df,
+        x="baseSeverity",
+        y="days_to_exploit",
+        category_orders={"baseSeverity": SEVERITY_ORDER},
+        color="baseSeverity",
+        color_discrete_map=SEVERITY_COLOR_MAP,
+        points="outliers",
+        title="Severity별 악용까지 걸린 시간",
+    )
+    fig.update_layout(
+        xaxis_title="CVSS Severity",
+        yaxis_title="일수",
+        margin=dict(l=60, r=40, t=80, b=60),
+        showlegend=False,
+    )
+    return fig
+
+
+# 기능: CVSS baseScore와 SKR Score 관계를 산점도로 시각화한다.
+# 매개변수: df(skrScore 포함 원본 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_cvss_skr_scatter(df: pd.DataFrame):
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        fig = px.scatter(title="CVSS vs SKR Scatter (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    working = enriched.dropna(subset=["baseScore", "skrScore"]).copy()
+    if working.empty:
+        fig = px.scatter(title="CVSS vs SKR Scatter (점수 없음)")
+        fig.add_annotation(text="점수 데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    working["cisaLabel"] = working["cisaFlag"].apply(lambda flag: "악용됨" if int(flag or 0) else "미확인")
+    fig = px.scatter(
+        working,
+        x="baseScore",
+        y="skrScore",
+        color="cisaLabel",
+        size="exploitabilityScore",
+        hover_data={"cveId": True, "baseSeverity": True, "exploitabilityScore": True, "cisaLabel": True},
+        color_discrete_map={"악용됨": "#d62728", "미확인": "#1f77b4"},
+        title="CVSS 기본 점수 vs SKR Score 산점도",
+    )
+    fig.update_traces(opacity=0.85)
+    max_score = max(working["baseScore"].max(), working["skrScore"].max())
+    fig.add_trace(
+        go.Scatter(
+            x=[0, max_score],
+            y=[0, max_score],
+            mode="lines",
+            name="CVSS = SKR",
+            line=dict(color="#888", dash="dash"),
+            showlegend=True,
+        )
+    )
+    fig.update_layout(
+        xaxis_title="CVSS Base Score",
+        yaxis_title="SKR Score",
+        legend_title="CISA 플래그",
+        margin=dict(l=60, r=40, t=80, b=60),
+    )
+    return fig
+
+
+# 기능: Severity별 baseScore와 SKR 평균을 요약한다.
+# 매개변수: df(skrScore 포함 DataFrame).
+# 반환: baseSeverity별 평균 점수 DataFrame.
+def summarize_severity_score_means(df: pd.DataFrame) -> pd.DataFrame:
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        return pd.DataFrame(columns=["baseSeverity", "avgBaseScore", "avgSkrScore"])
+    working = enriched.copy()
+    working["baseSeverity"] = working["baseSeverity"].fillna("UNKNOWN").str.upper()
+    summary = (
+        working.groupby("baseSeverity", as_index=False)
+        .agg(avgBaseScore=("baseScore", "mean"), avgSkrScore=("skrScore", "mean"))
+    )
+    summary["avgBaseScore"] = summary["avgBaseScore"].fillna(0.0)
+    summary["avgSkrScore"] = summary["avgSkrScore"].fillna(0.0)
+    summary["baseSeverity"] = pd.Categorical(summary["baseSeverity"], categories=SEVERITY_ORDER, ordered=True)
+    return summary.sort_values("baseSeverity").reset_index(drop=True)
+
+
+# 기능: Severity별 평균 baseScore/SKR를 그룹형 막대로 비교한다.
+# 매개변수: summary_df(summarize_severity_score_means 결과).
+# 반환: Plotly Figure 객체.
+def build_severity_score_compare_chart(summary_df: pd.DataFrame):
+    if summary_df.empty:
+        fig = go.Figure()
+        fig.update_layout(title="Severity별 평균 점수 비교 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    fig = go.Figure()
+    fig.add_bar(
+        x=summary_df["baseSeverity"],
+        y=summary_df["avgBaseScore"],
+        name="평균 CVSS",
+        marker_color="#1f77b4",
+    )
+    fig.add_bar(
+        x=summary_df["baseSeverity"],
+        y=summary_df["avgSkrScore"],
+        name="평균 SKR",
+        marker_color="#ff7f0e",
+    )
+    fig.update_layout(
+        title="Severity별 평균 CVSS vs SKR",
+        barmode="group",
+        xaxis_title="CVSS Severity",
+        yaxis_title="평균 점수",
+        margin=dict(l=60, r=40, t=80, b=60),
+    )
+    return fig
+
+
+# 기능: SKR와 CVSS 점수 차이(skr-base)를 히스토그램으로 나타낸다.
+# 매개변수: df(skrScore 포함 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_skr_delta_histogram(df: pd.DataFrame):
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        fig = px.histogram(title="SKR - CVSS 편차 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    working = enriched.copy()
+    working["skr_delta"] = working["skrScore"] - working["baseScore"]
+    working["cisaLabel"] = working["cisaFlag"].apply(lambda flag: "악용됨" if int(flag or 0) else "미확인")
+    fig = px.histogram(
+        working,
+        x="skr_delta",
+        color="cisaLabel",
+        nbins=40,
+        color_discrete_map={"악용됨": "#d62728", "미확인": "#1f77b4"},
+        title="SKR - CVSS 점수 편차",
+    )
+    fig.update_layout(
+        xaxis_title="SKR Score - CVSS Base Score",
+        yaxis_title="취약점 수",
+        legend_title="CISA 플래그",
+        margin=dict(l=60, r=40, t=80, b=60),
+    )
+    return fig
+
+
+# 기능: SKR-CVSS 점수 편차 구간별 악용 비율을 시각화한다.
+# 매개변수: df(skrScore 포함 DataFrame).
+# 반환: Plotly Figure 객체.
+def build_skr_delta_ratio_chart(df: pd.DataFrame):
+    enriched = _prepare_skr_enriched(df)
+    if enriched.empty:
+        fig = px.bar(title="SKR-CVSS 편차별 악용 비율 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    working = enriched.copy()
+    working["skr_delta"] = working["skrScore"] - working["baseScore"]
+    working["delta_band"] = pd.cut(
+        working["skr_delta"],
+        bins=[-float("inf"), -2, 0, 2, float("inf")],
+        labels=["<-2", "-2~0", "0~2", ">2"],
+        include_lowest=True,
+    )
+    working = working.dropna(subset=["delta_band"])
+    if working.empty:
+        fig = px.bar(title="SKR-CVSS 편차별 악용 비율 (데이터 없음)")
+        fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
+        return fig
+
+    summary = (
+        working.groupby("delta_band", as_index=False)
+        .agg(count=("cveId", "size"), exploited=("cisaFlag", "sum"))
+    )
+    summary["ratio"] = summary.apply(
+        lambda row: (row["exploited"] / row["count"]) if row["count"] else 0.0,
+        axis=1,
+    )
+    fig = px.bar(
+        summary,
+        x="delta_band",
+        y="ratio",
+        text=summary["ratio"].map(lambda v: f"{v * 100:.1f}%"),
+        title="SKR-CVSS 편차 구간별 악용 비율",
+    )
+    fig.update_layout(
+        xaxis_title="SKR Score - CVSS Base Score 구간",
+        yaxis_title="악용 비율",
+        yaxis=dict(tickformat=".0%", range=[0, 1]),
+        showlegend=False,
+        margin=dict(l=60, r=40, t=80, b=60),
+    )
+    return fig
+
 
 # 기능: skrScore 임계값을 넘는 레코드를 vendor 기준으로 집계한다.
 # 매개변수: df(skrScore 포함 DF), top_n(상위 표출 수), threshold(skrScore 필터 값).
