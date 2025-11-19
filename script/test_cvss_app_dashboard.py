@@ -110,7 +110,7 @@ def main() -> None:
     selected_years = st.sidebar.multiselect(
         "Years to load (directory only)",
         options=available_years,
-        default=available_years,
+        default=[year for year in available_years if year == 2025] or available_years,
     )
 
     # ----------------------------

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import gzip
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -20,25 +19,9 @@ def load_cve_records(
     cve_dir = Path(cve_dir)
     lang_pref = languages or (DEFAULT_DESCRIPTION_LANG,)
     records: List[dict] = []
-    feed_candidates = _collect_feed_candidates(cve_dir)
-    for base_stem, paths in feed_candidates.items():
-        feed = None
-        errors: list[Exception] = []
-        for feed_path in paths:
-            try:
-                if str(feed_path).endswith(".gz"):
-                    with gzip.open(feed_path, "rt", encoding="utf-8") as fh:
-                        feed = json.load(fh)
-                else:
-                    with feed_path.open("r", encoding="utf-8") as fh:
-                        feed = json.load(fh)
-                break
-            except (EOFError, json.JSONDecodeError) as exc:
-                errors.append(exc)
-                continue
-        if feed is None:
-            print(f"[WARN] Skipping CVE feed (unreadable): {base_stem} -> {paths}")  # noqa: T201
-            continue
+    for feed_path in sorted(cve_dir.glob("*.json")):
+        with feed_path.open("r", encoding="utf-8") as fh:
+            feed = json.load(fh)
         for entry in feed.get("vulnerabilities", []):
             cve = entry.get("cve") or {}
             cve_id = cve.get("id")
@@ -81,8 +64,6 @@ def load_cwe_catalog(cwe_file: Path) -> Dict[str, dict]:
     Parse the CWE XML catalog and retain only the required descriptive fields.
     """
     cwe_file = Path(cwe_file)
-    if not cwe_file.exists():
-        return {}
     tree = ET.parse(cwe_file)
     root = tree.getroot()
     ns = {"cwe": "http://cwe.mitre.org/cwe-7"}
@@ -139,21 +120,6 @@ def _collect_background_details(elements: Iterable[ET.Element]) -> str | None:
 
 def _strip_text(value: str | None) -> str | None:
     return value.strip() if value else None
-
-
-def _collect_feed_candidates(cve_dir: Path) -> Dict[str, list[Path]]:
-    """
-    Group raw CVE feeds by year stemming, preferring .json.gz to .json for each base.
-    """
-    candidates: Dict[str, list[Path]] = {}
-    for feed_path in cve_dir.glob("*.json*"):
-        stem = feed_path.name.replace(".json.gz", "").replace(".json", "")
-        candidates.setdefault(stem, []).append(feed_path)
-    # Sort each candidate list so .gz comes first (if present), then .json
-    for paths in candidates.values():
-        paths.sort(key=lambda p: (0 if str(p).endswith(".gz") else 1, p.name))
-    # Preserve deterministic outer ordering by stem name
-    return dict(sorted(candidates.items(), key=lambda item: item[0]))
 
 
 if __name__ == "__main__":
