@@ -42,6 +42,13 @@ from .skr_score import (
     summarize_product_counts,
     summarize_vendor_counts,
 )
+from .published_trend_app import (
+    build_monthly_published_trend,
+    build_publication_heatmap,
+    build_yearly_published_trend,
+    summarize_monthly_counts,
+    summarize_yearly_counts,
+)
 
 __all__ = [
     "build_yearly_cve_chart",
@@ -72,4 +79,9 @@ __all__ = [
     "build_vendor_score_chart",
     "build_product_score_chart",
     "build_cwe_score_chart",
+    "build_monthly_published_trend",
+    "build_publication_heatmap",
+    "build_yearly_published_trend",
+    "summarize_monthly_counts",
+    "summarize_yearly_counts",
 ]

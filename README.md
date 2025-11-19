@@ -7,6 +7,7 @@
 - **데이터 파이프라인**: NVD/MITRE 원천 데이터를 자동 다운로드 → 정규화 → 연도별 JSON 샤드 생성.
 - **RAG 인덱싱**: Sentence-Transformers(기본) 또는 OpenAI 임베딩으로 FAISS 인덱스를 구축하고, LangChain Retriever/LLM으로 질의 응답.
 - **Streamlit UI**: 인사이트별(벤더/제품 Top-N, SKR Score 고위험) 시각화 탭 + RAG 챗봇 탭을 통합 제공.
+- **Published Trend 시계열**: 연도/월별 CVE 공개량을 Plotly로 시각화하고 같은 화면에서 계절성 요약 챗봇을 실행.
 - **분석/리포트 자산**: `reports/`에 도식/텍스트를 저장하고, 추가 인사이트 모듈을 쉽게 확장할 수 있는 구조.
 
 ## 리포지토리 구조 요약

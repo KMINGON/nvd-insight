@@ -12,6 +12,7 @@ import streamlit as st
 # 기능: 패키지 실행/스크립트 실행 양쪽에서 공용 모듈을 임포트하기 위한 가드 로직.
 try:
     from ..analytics import iter_dataset_files, load_processed_dataframe
+    from ..analytics.charts import published_trend_app as trend_charts
     from ..analytics.charts import vendor_product_chart as vendor_chart
     from ..analytics.charts import skr_score
     from ..config import PROCESSED_DATASET_DIR
@@ -22,6 +23,7 @@ except ImportError:
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
     from src.analytics import iter_dataset_files, load_processed_dataframe
+    from src.analytics.charts import published_trend_app as trend_charts
     from src.analytics.charts import vendor_product_chart as vendor_chart
     from src.analytics.charts import skr_score
     from src.config import PROCESSED_DATASET_DIR
@@ -317,6 +319,67 @@ def render_skr_score_page(
         )
 
 
+def render_published_trend_page(
+    df: pd.DataFrame,
+    years: Tuple[int, ...],
+    retriever: Optional[RagRetriever],
+) -> None:
+    """공개일 기반 시계열 인사이트 페이지를 렌더링한다."""
+
+    analysis_tab, ai_tab = st.tabs(["분석 시각화", "AI 요약 리포트"])
+    yearly_summary = trend_charts.summarize_yearly_counts(df)
+    available_years = yearly_summary["year"].astype(int).tolist()
+    default_focus = "전체 연도"
+    if available_years:
+        default_focus = str(max(available_years))
+
+    with analysis_tab:
+        st.metric("선택된 기간 총 CVE", f"{int(yearly_summary['count'].sum()):,}")
+        focus_options = ["전체 연도"] + [str(year) for year in available_years]
+        focus_year_label = st.selectbox(
+            "월별 추이 기준 연도",
+            options=focus_options,
+            index=focus_options.index(default_focus) if default_focus in focus_options else 0,
+            help="최근 연도 계절성을 보거나 전체 시즌 패턴을 확인할 수 있습니다.",
+        )
+        focus_year = None if focus_year_label == "전체 연도" else int(focus_year_label)
+
+        yearly_fig = trend_charts.build_yearly_published_trend(df)
+        st.plotly_chart(yearly_fig, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            monthly_title = "월별 Published 추이" if focus_year is None else f"{focus_year}년 월별 추이"
+            st.markdown(f"**{monthly_title}**")
+            monthly_fig = trend_charts.build_monthly_published_trend(df, focus_year=focus_year)
+            st.plotly_chart(monthly_fig, use_container_width=True)
+        with col2:
+            st.markdown("**연도-월 Heatmap**")
+            heatmap_fig = trend_charts.build_publication_heatmap(df)
+            st.plotly_chart(heatmap_fig, use_container_width=True)
+
+    with ai_tab:
+        if retriever is None:
+            st.info("RAG 검색기를 사용할 수 없습니다. 인덱스 상태를 확인하세요.")
+            return
+        context_df = yearly_summary
+        if focus_year is not None:
+            monthly_summary = trend_charts.summarize_monthly_counts(df, year=focus_year)
+            monthly_summary["year"] = focus_year
+            context_df = monthly_summary
+        system_prompt = (
+            "당신은 CVE 공개 시점 트렌드를 분석하는 한국어 보안 분석가입니다. "
+            "연도/월별 변동성과 스파이크, 계절 패턴을 짚어주고 주요 이상 구간이 있으면 근거를 들어 설명하세요."
+        )
+        session_key = build_session_key("published_trend", years, suffix=f"focus{focus_year or 'all'}")
+        streamlit_chat(
+            retriever,
+            df=context_df,
+            system_prompt=system_prompt,
+            session_key=session_key,
+        )
+
+
 INSIGHT_PAGES = {
     "vendor_product": InsightPage(
         key="vendor_product",
@@ -329,6 +392,12 @@ INSIGHT_PAGES = {
         label="SKR Score 기반 고위험 인사이트",
         description="SKR Score가 높은 CVE/벤더/제품/CWE를 다각도로 분석합니다.",
         render=render_skr_score_page,
+    ),
+    "published_trend": InsightPage(
+        key="published_trend",
+        label="Published Trend 시계열 인사이트",
+        description="연도·월별 CVE 공개 추이를 시각화하고 시즌별 위험 요인을 요약합니다.",
+        render=render_published_trend_page,
     ),
 }
 
