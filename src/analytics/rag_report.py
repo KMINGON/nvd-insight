@@ -25,6 +25,9 @@ def summarize_with_rag(
 
     TODO: move summarization prompts into a config file once prompt engineering stabilizes.
     """
+    if not getattr(retriever, "is_loaded", False):
+        retriever.load()
+
     output_path = Path(output_path or (REPORTS_TEXT_DIR / "rag_report.txt"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lines: List[str] = []

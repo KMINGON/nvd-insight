@@ -51,13 +51,3 @@ def build_yearly_cve_chart(
     )
     fig.update_layout(margin=dict(l=40, r=20, t=60, b=40))
     return fig
-
-
-def save_figure(figure: Figure, output_path: Path | str, *, format_hint: Optional[str] = None) -> Path:
-    """
-    공통 저장 래퍼: Streamlit 외부에서 이미지로 내보내야 할 때 사용.
-    """
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    figure.write_image(str(output_path), format=format_hint)
-    return output_path
