@@ -5,6 +5,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import json
 import sys
+from datetime import datetime
+import re
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -29,7 +31,9 @@ TOP10_COLUMNS = [
     "cvss",
     "exploitabilityScore",
     "cisaExploitAdd",
+    "skrScore",
 ]
+CISA_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 # 기능: 연도 입력값을 문자열 리스트로 정규화해 키/로딩에 재사용한다.
@@ -39,17 +43,6 @@ def normalize_years(years: Sequence[str] | None) -> List[str]:
     if years is None:
         return list(YEAR_CHOICES)
     return [str(year) for year in years]
-
-
-# 기능: 특정 연도의 JSON 샤드를 읽어 CVE 레코드 리스트로 반환한다.
-# 매개변수: year(문자열 연도), dataset_dir(JSON 파일들이 위치한 디렉터리 Path).
-# 반환: 연도별 레코드 딕셔너리 리스트.
-def load_records_for_year(year: str, dataset_dir: Path) -> List[dict]:
-    shard = dataset_dir / f"cve_cwe_dataset_{year}.json"
-    if not shard.exists():
-        return []
-    with shard.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
 
 
 # 기능: CPE 엔트리에서 vendor 문자열을 파싱한다.
@@ -80,6 +73,28 @@ def _extract_product(cpe_entry: object) -> Optional[str]:
         return None
     parts = uri.split(":")
     return parts[4] if len(parts) > 5 else None
+
+
+# 기능: CISA exploit 데이터가 유효한 날짜 문자열인지 검사한다.
+# 매개변수: value(CISA exploit 원본 값).
+# 반환: YYYY-MM-dd 형식을 만족하는 경우 True, 아니면 False.
+def _has_valid_cisa_flag(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (datetime, pd.Timestamp)):
+        return True
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate or candidate.lower() == "null":
+            return False
+        if not CISA_DATE_PATTERN.match(candidate):
+            return False
+        try:
+            datetime.strptime(candidate, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+    return False
 
 # 기능: 레코드 내 CVSS 메트릭에서 심각도, 점수, 벡터를 추출한다.
 # 매개변수: record(load_processed_dataframe 결과 행 딕셔너리).
@@ -118,14 +133,16 @@ def compute_skr_score(base_score, exploit_score, cisa_flag) -> float:
 # 반환: skrScore, cisaFlag 등을 포함한 DataFrame.
 def build_skr_score_added_df(source_df: pd.DataFrame | None) -> pd.DataFrame:
     if source_df is None or source_df.empty:
-        return pd.DataFrame(columns=TOP10_COLUMNS + ["cisaFlag", "skrScore"])
+        return pd.DataFrame(columns=TOP10_COLUMNS + ["cisaFlag"])
 
     rows: List[dict] = []
     for record in source_df.to_dict(orient="records"):
         payload = extract_cvss_payload(record)
         if not payload:
             continue
-        cisa_flag = 1 if record.get("cisaExploitAdd") else 0
+        raw_cisa = record.get("cisaExploitAdd")
+        cisa_valid = _has_valid_cisa_flag(raw_cisa)
+        cisa_flag = 1 if cisa_valid else 0
         rows.append(
             {
                 "cveId": record.get("cveId"),
@@ -135,7 +152,7 @@ def build_skr_score_added_df(source_df: pd.DataFrame | None) -> pd.DataFrame:
                 "baseScore": payload["baseScore"],
                 "cvss": payload.get("cvss"),
                 "exploitabilityScore": payload.get("exploitabilityScore", 0.0),
-                "cisaExploitAdd": record.get("cisaExploitAdd"),
+                "cisaExploitAdd": raw_cisa if cisa_valid else None,
                 "cisaFlag": cisa_flag,
                 "cpes": record.get("cpes"),
                 "cwes": record.get("cwes"),
@@ -143,7 +160,7 @@ def build_skr_score_added_df(source_df: pd.DataFrame | None) -> pd.DataFrame:
         )
 
     if not rows:
-        return pd.DataFrame(columns=TOP10_COLUMNS + ["cisaFlag", "skrScore"])
+        return pd.DataFrame(columns=TOP10_COLUMNS + ["cisaFlag"])
 
     enriched = pd.DataFrame(rows)
     enriched["exploitabilityScore"] = enriched["exploitabilityScore"].fillna(0.0)
@@ -182,7 +199,7 @@ def _build_top10_from_enriched(enriched: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=TOP10_COLUMNS)
     top_df = enriched.sort_values(by="skrScore", ascending=False)
     selected = top_df.drop_duplicates(subset="cveId").head(TOP_K).reset_index(drop=True)
-    return selected.drop(columns=["cisaFlag", "skrScore"], errors="ignore")
+    return selected.drop(columns=["cisaFlag"], errors="ignore")
 
 # 기능: 연도 조합별 Top10 DataFrame을 캐시해 재사용한다.
 # 매개변수: year_key(정렬된 연도 문자열 튜플).
@@ -220,13 +237,14 @@ def build_top10_chart(df: pd.DataFrame):
     fig = px.bar(
         df,
         x="cveId",
-        y="baseScore",
+        y="skrScore",
         color="baseSeverity",
         color_discrete_map={"CRITICAL": "#d62728", "HIGH": "#ff7f0e"},
         hover_data={
             "cveId": True,
             "baseSeverity": True,
             "baseScore": True,
+            "skrScore": True,
             "exploitabilityScore": True,
             "cisaExploitAdd": True,
             "published": True,
@@ -235,8 +253,8 @@ def build_top10_chart(df: pd.DataFrame):
     )
     fig.update_layout(
         xaxis_title="CVE ID",
-        yaxis_title="CVSS Base Score",
-        yaxis=dict(range=[0, 10]),
+        yaxis_title="SKR Score",
+        yaxis=dict(range=[0, 12]),
         bargap=0.2,
         margin=dict(l=60, r=40, t=80, b=120),
     )
@@ -325,7 +343,7 @@ def summarize_product_counts(df: pd.DataFrame, top_n: int = 5, threshold: float 
 # 기능: vendor 요약 DataFrame을 Plotly 막대 차트로 시각화한다.
 # 매개변수: summary_df(summarize_vendor_counts 결과), title(선택 제목 문자열).
 # 반환: Plotly Figure 객체.
-def build_vendor_score_chart(summary_df: pd.DataFrame, title: str | None = None):
+def build_vendor_score_chart(summary_df: pd.DataFrame, title: str | None = None, threshold: float | None = None):
     if summary_df.empty:
         fig = px.bar(title=title or "Vendor 데이터 없음")
         fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
@@ -336,13 +354,14 @@ def build_vendor_score_chart(summary_df: pd.DataFrame, title: str | None = None)
         y="count",
         title=title or "Top Vendors",
     )
-    fig.update_layout(xaxis_title="Vendor", yaxis_title="skrScore >= 7 건수")
+    label = f"skrScore >= {threshold:g} 건수" if threshold is not None else "skrScore >= 7 건수"
+    fig.update_layout(xaxis_title="Vendor", yaxis_title=label)
     return fig
 
 # 기능: product 요약 DataFrame을 Plotly 막대 차트로 표현한다.
 # 매개변수: summary_df(summarize_product_counts 결과), title(선택 제목 문자열).
 # 반환: Plotly Figure 객체.
-def build_product_score_chart(summary_df: pd.DataFrame, title: str | None = None):
+def build_product_score_chart(summary_df: pd.DataFrame, title: str | None = None, threshold: float | None = None):
     if summary_df.empty:
         fig = px.bar(title=title or "Product 데이터 없음")
         fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
@@ -353,7 +372,8 @@ def build_product_score_chart(summary_df: pd.DataFrame, title: str | None = None
         y="count",
         title=title or "Top Products",
     )
-    fig.update_layout(xaxis_title="Product", yaxis_title="skrScore >= 7 건수")
+    label = f"skrScore >= {threshold:g} 건수" if threshold is not None else "skrScore >= 7 건수"
+    fig.update_layout(xaxis_title="Product", yaxis_title=label)
     return fig
 
 # 기능: skrScore 임계값을 넘는 레코드를 CWE 기준으로 집계하고 설명을 포함한다.
@@ -431,7 +451,7 @@ def summarize_cwe_scores(df: pd.DataFrame, top_n: int = 5, threshold: float = 7.
 # 기능: CWE 요약 DataFrame을 Plotly 막대 차트로 가시화한다.
 # 매개변수: summary_df(summarize_cwe_scores 결과), title(선택 제목 문자열).
 # 반환: Plotly Figure 객체.
-def build_cwe_score_chart(summary_df: pd.DataFrame, title: str | None = None):
+def build_cwe_score_chart(summary_df: pd.DataFrame, title: str | None = None, threshold: float | None = None):
     if summary_df.empty:
         fig = px.bar(title=title or "CWE 데이터 없음")
         fig.add_annotation(text="데이터가 없습니다", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper")
@@ -442,5 +462,6 @@ def build_cwe_score_chart(summary_df: pd.DataFrame, title: str | None = None):
         y="count",
         title=title or "Top CWEs",
     )
-    fig.update_layout(xaxis_title="CWE ID", yaxis_title="skrScore >= 7 건수")
+    label = f"skrScore >= {threshold:g} 건수" if threshold is not None else "skrScore >= 7 건수"
+    fig.update_layout(xaxis_title="CWE ID", yaxis_title=label)
     return fig

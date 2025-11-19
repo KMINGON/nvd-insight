@@ -1,5 +1,5 @@
 """
-Streamlit Streamlit multi-page app package.
+Streamlit multi-page app package.
 
 `Home.py` at the project root serves as the Streamlit entrypoint and delegates to the
 renderers in :mod:`src.app.pages`. Chat-specific helpers continue to live in
