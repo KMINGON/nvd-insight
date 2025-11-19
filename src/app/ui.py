@@ -33,7 +33,7 @@ except ImportError:
 YEAR_PATTERN = re.compile(r"(\d{4})")
 
 
-@dataclass
+@dataclass  # 데이터를 담기 위한 클래스임을 정의
 class InsightPage:
     """UI에서 하나의 인사이트 페이지 구성을 정의한다.
 
@@ -47,7 +47,8 @@ class InsightPage:
     key: str
     label: str
     description: str
-    render: Callable[[pd.DataFrame, Tuple[int, ...], Optional[RagRetriever]], None]
+    # 호출 가능한 객체를 의미하는 타입 힌트 
+    render: Callable[[pd.DataFrame, Tuple[int, ...], Optional[RagRetriever]], None] # 매개변수 : 페이지에서 사용할 데이터프레임, 선택한 연도, RAG 검색기 | 반환값 : 없음
 
 
 # 기능: Streamlit 진입점을 실행해 공통 필터+인사이트 페이지를 렌더링한다.
@@ -73,7 +74,7 @@ def run_app(dataset_path: Optional[str] = None) -> None:
         st.error("처리된 데이터셋을 찾을 수 없습니다. build_dataset.py를 먼저 실행하세요.")
         return
 
-    with st.sidebar:
+    with st.sidebar:    # 사이드바에 연도 선택 및 Page 선택 위젯을 배치한다.
         st.header("공통 데이터 필터")
         # 기본 필터는 2025가 있으면 그 연도만, 없으면 전체 연도다.
         selected_years = st.multiselect(
@@ -86,7 +87,7 @@ def run_app(dataset_path: Optional[str] = None) -> None:
         insight_key = st.selectbox(
             "인사이트 선택",
             options=list(INSIGHT_PAGES.keys()),
-            format_func=lambda key: INSIGHT_PAGES[key].label,
+            format_func=lambda key: INSIGHT_PAGES[key].label,   # 
         )
 
     # 다중 선택 결과를 정렬해 튜플로 저장하면 캐싱 키와 세션 키 모두 안정적으로 구성된다.
