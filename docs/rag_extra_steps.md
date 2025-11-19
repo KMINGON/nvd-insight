@@ -31,7 +31,7 @@ python script/build_faiss_index.py \
 
 ```bash
 source .venv/bin/activate
-streamlit run src/app/ui.py
+streamlit run Home.py
 ```
 
 OpenAI Chat 모델을 사용 중이라면 `.env`에 `OPENAI_API_KEY`가 설정되어 있어야 챗봇 응답이 생성됩니다.
