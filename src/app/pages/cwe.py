@@ -26,6 +26,7 @@ def render_cwe_page(
         top_n = st.slider("CWE Top-N 범위", min_value=5, max_value=50, value=20, step=5)
         try:
             cwe_summary = cwe_chart.summarize_cwe_counts(df, top_n=top_n)
+            st.caption("가장 많이 등장한 CWE 상위 목록을 시각화한 차트입니다.")
             fig = cwe_chart.build_cwe_top_chart(df, top_n=top_n)
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(cwe_summary)

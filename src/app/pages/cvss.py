@@ -60,6 +60,7 @@ def render_cvss_page(
         col1, col2 = st.columns(2)
         with col1:
             try:
+                st.caption("CVSS 심각도 비중을 한눈에 보여주는 막대 차트입니다.")
                 severity_fig = cvss_app.build_cvss_severity_chart(df, metric_col=metric_col)
                 st.plotly_chart(severity_fig, use_container_width=True)
                 metrics_df = cvss_app.extract_cvss_metrics(df, metric_col=metric_col)
@@ -75,6 +76,7 @@ def render_cvss_page(
                 st.warning(f"Severity 분포를 계산할 수 없습니다: {exc}")
         with col2:
             try:
+                st.caption("지정한 점수 구간별로 CVSS baseScore가 얼마나 분포하는지 확인하세요.")
                 score_fig = cvss_app.build_cvss_score_bin_chart(
                     df,
                     metric_col=metric_col,
