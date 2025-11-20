@@ -96,7 +96,6 @@ class RagRetriever:
             allow_dangerous_deserialization=True,
         )
         if ChatOpenAI is not None and config.OPENAI_API_KEY:
-            # TODO: 로컬 LLM이나 Azure 엔드포인트로도 전환할 수 있도록 확장한다.
             self.llm = ChatOpenAI(
                 model=self.config.chat_model,
                 temperature=0.1,
@@ -201,8 +200,6 @@ class RagRetriever:
         반환값:
             ``generate_response``가 생성한 문자열.
         """
-        _ = citations  # TODO: 인용 포맷이 완성되면 활용하도록 확장한다.
-        # ask()는 단순화를 위해 독립된 프롬프트/히스토리 없이 generate_response에 위임한다.
         return self.generate_response(
             system_prompt="You are a helpful security analysis assistant.",
             user_prompt=question,

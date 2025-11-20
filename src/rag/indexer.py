@@ -26,9 +26,7 @@ except ImportError:  # pragma: no cover
 
 
 @dataclass
-class IndexRecord:
-    """검색 가능한 메타데이터와 텍스트 청크를 묶어 보관하는 컨테이너."""
-
+class IndexRecord:  # 인덱싱할 단일 문서 레코드
     page_content: str
     metadata: dict
 
@@ -70,7 +68,7 @@ class VectorIndexer:
             with json_file.open("r", encoding="utf-8") as fh:
                 try:
                     rows = json.load(fh)
-                except json.JSONDecodeError:  # pragma: no cover - invalid input guard
+                except json.JSONDecodeError:
                     continue
             for row in rows:
                 # 인덱싱 단위는 "행"이므로 각 행마다 메타데이터와 텍스트를 추출한다.

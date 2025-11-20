@@ -143,6 +143,3 @@ CHAT_COMPLETION_MODEL=gpt-4o-mini
 - `docs/data_schema_for_analysis.md` – 정규화 결과 스키마
 - `docs/analytics_collab_guide.md` – Plotly/Altair 협업 규칙
 - `docs/rag_extra_steps.md` – RAG 추가 설정 가이드
-
----
-이전 `README.md`는 `README_v1.md` 이라는 이름으로 기존 참고용으로 그대로 두었습니다.
