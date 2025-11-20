@@ -21,11 +21,10 @@ def render_skr_score_page(
     enriched = skr_score.build_skr_score_added_df(df)
     top10_df = skr_score.build_top10_dataset(source_df=enriched)
 
-    analysis_tab, severity_tab, band_tab, compare_tab, exploit_tab, ai_tab = st.tabs([
+    analysis_tab, severity_tab, band_tab, exploit_tab, ai_tab = st.tabs([
         "분석 시각화",
         "심각도 vs 악용",
         "위험도 구간",
-        "CVSS vs SKR",
         "악용 속도 분석",
         "AI 요약 리포트",
     ])
@@ -45,24 +44,28 @@ def render_skr_score_page(
         cwe_summary = skr_score.summarize_cwe_scores(enriched, top_n=top_n, threshold=score_threshold)
 
         st.plotly_chart(skr_score.build_top10_timeline_chart(top10_df), use_container_width=True)
+        st.caption("올해 가장 위험한 취약점들이 언제 발표됐는지 한눈에 보여 주는 타임라인입니다.")
         col1, col2 = st.columns(2)
         with col1:
             st.plotly_chart(
                 skr_score.build_vendor_score_chart(vendor_summary, "SKR 고위험 벤더"),
                 use_container_width=True,
             )
+            st.caption("SKR Score 기준으로 공급망 위험이 높은 벤더를 강조합니다.")
             st.dataframe(vendor_summary)
         with col2:
             st.plotly_chart(
                 skr_score.build_product_score_chart(product_summary, "SKR 고위험 제품"),
                 use_container_width=True,
             )
+            st.caption("고위험 취약점이 집중된 제품을 비교해 패치 우선순위를 잡습니다.")
             st.dataframe(product_summary)
 
         st.plotly_chart(
             skr_score.build_cwe_score_chart(cwe_summary, "SKR 고위험 CWE"),
             use_container_width=True,
         )
+        st.caption("반복적으로 등장하는 고위험 CWE 유형을 확인해 설계 취약점을 진단합니다.")
         st.dataframe(cwe_summary)
 
     with severity_tab:
@@ -80,8 +83,6 @@ def render_skr_score_page(
         _, band_summary = skr_score.summarize_skr_band_distribution(enriched)
         st.plotly_chart(skr_score.build_skr_band_pie_chart(band_summary), use_container_width=True)
         st.caption("1년치 취약점 중 실제 위험도가 높은 구간이 어느 정도 비중을 차지하는지 보여줍니다.")
-        st.plotly_chart(skr_score.build_skr_band_exploit_ratio_chart(band_summary), use_container_width=True)
-        st.caption("각 위험도 구간 안에서 실제 악용된 비중을 별도로 확인해 구체적인 우선순위를 잡을 수 있습니다.")
         st.plotly_chart(skr_score.build_skr_band_dual_axis_chart(band_summary), use_container_width=True)
         st.caption("막대는 전체 CVE 건수, 선은 악용 비율(%)을 나타내어 '규모+비중'을 동시에 확인합니다.")
         if not band_summary.empty:
@@ -90,47 +91,6 @@ def render_skr_score_page(
             st.dataframe(band_table.rename(columns={"band": "구간", "count": "건수", "ratio": "비율", "exploited": "악용 건수"}))
         else:
             st.info("SKR Score 구간 분포를 계산할 데이터가 없습니다.")
-
-    # CVSS 기본 점수와 SKR 점수를 비교해 재조정 효과를 해석하는 탭
-    with compare_tab:
-        st.markdown("**CVSS vs SKR 점수 비교**")
-        # 산점도: 개별 취약점에서 CVSS 대비 SKR 조정 방향 확인
-        st.plotly_chart(skr_score.build_cvss_skr_scatter(enriched), use_container_width=True)
-        st.caption(
-            "대각선 위에 위치한 점은 SKR Score가 CVSS보다 높게 평가된 것으로, 악용 보고(빨간색)일수록 해당 영역에 모여야 정상적인 위험 조정이 이루어진 것입니다."
-        )
-
-        severity_means = skr_score.summarize_severity_score_means(enriched)
-        # 막대: 각 Severity 그룹에서 평균 CVSS와 평균 SKR 변화를 비교
-        st.plotly_chart(skr_score.build_severity_score_compare_chart(severity_means), use_container_width=True)
-        if not severity_means.empty:
-            st.dataframe(
-                severity_means.rename(
-                    columns={
-                        "baseSeverity": "Severity",
-                        "avgBaseScore": "평균 CVSS",
-                        "avgSkrScore": "평균 SKR",
-                    }
-                )
-            )
-        else:
-            st.info("Severity별 평균을 계산할 데이터가 없습니다.")
-        st.caption(
-            "같은 Severity라 해도 exploitability·CISA 플래그를 반영하면 SKR 평균이 더 높아질 수 있으며, Medium에서도 실제 악용 케이스가 섞이면 점수가 상승합니다."
-        )
-
-        # 히스토그램: 편차 분포와 CISA 플래그를 동시에 체크
-        st.plotly_chart(skr_score.build_skr_delta_histogram(enriched), use_container_width=True)
-        st.caption(
-            "가로축은 SKR Score - CVSS Base Score 편차(음수: SKR이 더 낮음, 0: 비슷, 양수: SKR이 더 높음), "
-            "세로축은 해당 구간의 취약점 수, 색상은 CISA 플래그를 나타냅니다."
-        )
-        st.caption(
-            "히스토그램 오른쪽 꼬리는 'CVSS보다 SKR가 더 높은' 취약점이며, 악용 플래그가 있는 점들이 오른쪽에 몰려 있다면 설계 의도가 잘 반영된 것입니다."
-        )
-        # 막대: 편차 구간별 악용 비율을 확인해 CVSS 대비 조정 효과 진단
-        st.plotly_chart(skr_score.build_skr_delta_ratio_chart(enriched), use_container_width=True)
-        st.caption("편차 구간별로 실제 악용 비율을 확인해 CVSS 대비 SKR 조정이 어떤 구간에서 가장 효과적인지 파악할 수 있습니다.")
 
     with exploit_tab:
         st.markdown("**악용까지 걸린 시간 분석**")
@@ -141,9 +101,12 @@ def render_skr_score_page(
             col_hist, col_box = st.columns(2)
             with col_hist:
                 st.plotly_chart(skr_score.build_days_to_exploit_histogram(days_df), use_container_width=True)
+                st.caption("발표 후 악용까지 걸린 일수 분포를 Severity별로 겹쳐 위험 구간을 보여줍니다.")
                 st.plotly_chart(skr_score.build_days_to_exploit_kde(days_df), use_container_width=True)
+                st.caption("밀도 곡선으로 악용 속도가 가장 많이 몰린 구간을 부드럽게 파악합니다.")
             with col_box:
                 st.plotly_chart(skr_score.build_days_to_exploit_box(days_df), use_container_width=True)
+                st.caption("Severity별로 악용 속도 중앙값과 이상치를 비교해 긴급도를 판단합니다.")
             st.caption("악용까지 걸린 시간이 짧을수록 긴급 대응이 필요하다는 메시지를 강조합니다.")
             top_n = st.slider("발표 직후 빠르게 악용된 취약점 Top-N", min_value=3, max_value=20, value=5, step=1, key="skr_days_topn")
             top_exploited = days_df.nsmallest(top_n, "days_to_exploit").copy()
